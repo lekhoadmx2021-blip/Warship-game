@@ -11,34 +11,26 @@
 body { 
   font-family: Arial; 
   text-align: center;
-
-  /* 🌊 FIX BACKGROUND BIỂN (KHÔNG LỖI) */
   background-image: url("https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1920&q=80");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   background-attachment: fixed;
-
   margin: 0;
   padding: 0;
   color: white;
 }
 
-/* 🌫 overlay kiểu game mobile */
 body::before {
   content: "";
   position: fixed;
   top: 0; left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    rgba(0, 40, 80, 0.6),
-    rgba(0, 120, 180, 0.4)
-  );
+  background: linear-gradient(rgba(0,40,80,0.6), rgba(0,120,180,0.4));
   z-index: -1;
 }
 
-/* GRID */
 .grid { 
   display: none;
   grid-template-columns: repeat(9, 40px); 
@@ -47,7 +39,6 @@ body::before {
   margin: 20px auto; 
 }
 
-/* CELL */
 .cell {
   width: 40px;
   height: 40px;
@@ -57,36 +48,22 @@ body::before {
   align-items:center;
   justify-content:center;
   font-weight:bold;
-
   border-radius: 10px;
   background: rgba(255,255,255,0.05);
-
-  transition: 0.2s;
 }
 
-/* hover animation */
 .cell:hover {
   transform: scale(1.1);
   background: rgba(255,255,255,0.2);
 }
 
-/* hit / miss */
-.hit { 
-  background: rgba(255, 50, 50, 0.8);
-  box-shadow: 0 0 10px red;
-}
+.hit { background: rgba(255,50,50,0.8); }
+.miss { background: rgba(50,150,255,0.6); }
 
-.miss { 
-  background: rgba(50, 150, 255, 0.6);
-}
-
-/* board style */
 #board {
   background: rgba(255,255,255,0.08);
   padding: 15px;
   border-radius: 18px;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 0 20px rgba(0,0,0,0.3);
 }
 </style>
 </head>
@@ -98,6 +75,7 @@ body::before {
 <div>
   <input id="roomId" placeholder="Nhập Room ID">
   <button onclick="joinGame()">Tham gia</button>
+  <button onclick="enableRadar()">🔍 Radar</button>
 </div>
 
 <p id="status">Nhập Room ID để chơi</p>
@@ -130,6 +108,12 @@ let temp = [];
 let joined = false;
 let lastEventId = null;
 
+// ===== RADAR =====
+let radarMode = false;
+let radarTemp = [];
+let radarUsed = 0;
+const RADAR_LIMIT = 2;
+
 // ===== DRAW =====
 function drawBoard() {
   const board = document.getElementById("board");
@@ -140,7 +124,6 @@ function drawBoard() {
     div.className = "cell";
 
     if (localBoard[i] > 0) div.innerText = localBoard[i];
-
     if (enemyHits.includes(i)) div.classList.add("hit");
     if (myHits.includes(i)) div.classList.add("miss");
 
@@ -166,12 +149,8 @@ function joinGame() {
 
     if (!data) {
       player = "A";
-      ref.set({
-        players: 1,
-        phase: "waiting"
-      });
-    } 
-    else if (data.players === 1) {
+      ref.set({ players: 1, phase: "waiting" });
+    } else {
       player = "B";
       ref.update({
         players: 2,
@@ -193,18 +172,6 @@ function listenGame() {
     let data = snap.val();
     if (!data || !joined) return;
 
-    if (data.event && data.event.id !== lastEventId) {
-      lastEventId = data.event.id;
-
-      const ev = data.event;
-
-      if (ev.type === "sunk" && ev.owner === player) {
-        alert("💀 Tàu " + ev.ship + " của bạn đã bị tiêu diệt!");
-      }
-
-      db.ref("rooms/" + room + "/event").remove();
-    }
-
     if (data.ships && data.ships[player]) {
       localBoard = data.ships[player];
     }
@@ -212,44 +179,7 @@ function listenGame() {
     drawBoard();
 
     if (data.players < 2) {
-      statusText("Chờ người thứ 2...");
-      document.getElementById("board").style.display = "none";
-      return;
-    }
-
-    document.getElementById("board").style.display = "grid";
-
-    if (data.winner) {
-      statusText(data.winner === player ? "🎉 THẮNG!" : "💀 THUA!");
-
-      setTimeout(() => {
-        alert("Game kết thúc!");
-
-        if (player === "A") {
-          db.ref("rooms/" + room).remove();
-        }
-
-        resetGame();
-      }, 2000);
-
-      return;
-    }
-
-    if (data.phase === "placing") {
-
-      if (placing) {
-        statusText(placingShip === 2 ? "👉 Đặt tàu 2 ô" : "👉 Đặt tàu 3 ô");
-      } else {
-        statusText("Chờ đối phương...");
-      }
-
-      if (data.readyA && data.readyB) {
-        db.ref("rooms/" + room).update({
-          phase: "battle",
-          turn: "A"
-        });
-      }
-
+      statusText("Chờ người chơi...");
       return;
     }
 
@@ -264,158 +194,100 @@ function statusText(t){
   document.getElementById("status").innerText = t;
 }
 
-// ===== CLICK =====
-function clickCell(i) {
-  if (!joined) return;
-
-  if (placing) {
-    temp.push(i);
-
-    if (temp.length === placingShip) {
-      if (valid(temp, placingShip)) {
-        temp.forEach(x => localBoard[x] = placingShip);
-        temp = [];
-
-        if (placingShip === 2) {
-          placingShip = 3;
-          statusText("👉 Đặt tàu 3");
-        } else {
-          placing = false;
-          saveShips();
-        }
-      } else {
-        alert("Sai vị trí!");
-        temp = [];
-      }
-    }
-  } else {
-    if (enemyHits.includes(i) || myHits.includes(i)) return;
-    attack(i);
+// ===== RADAR =====
+function enableRadar() {
+  if (radarUsed >= RADAR_LIMIT) {
+    alert("Hết lượt Radar!");
+    return;
   }
 
-  drawBoard();
+  radarMode = true;
+  radarTemp = [];
+  statusText("🔍 Chọn 6 ô (2x3 hoặc 3x2)");
 }
 
-// ===== VALID =====
-function valid(arr, len) {
+// ===== CLICK =====
+function clickCell(i) {
+
+  if (!joined) return;
+
+  // ===== RADAR MODE =====
+  if (radarMode) {
+    if (radarTemp.includes(i)) return;
+
+    radarTemp.push(i);
+
+    if (radarTemp.length === 6) {
+      if (validRadar(radarTemp)) {
+        checkRadar(radarTemp);
+      } else {
+        alert("❌ Sai vùng radar!");
+      }
+
+      radarTemp = [];
+      radarMode = false;
+    }
+    return;
+  }
+
+  // ===== ATTACK =====
+  if (enemyHits.includes(i) || myHits.includes(i)) return;
+  attack(i);
+}
+
+// ===== RADAR VALID =====
+function validRadar(arr) {
   let r = arr.map(i => Math.floor(i / COLS));
   let c = arr.map(i => i % COLS);
 
-  if (len === 2) {
-    let dr = Math.abs(r[0] - r[1]);
-    let dc = Math.abs(c[0] - c[1]);
-    return (dr <= 1 && dc <= 1 && (dr + dc !== 0));
-  }
+  let h = Math.max(...r) - Math.min(...r) + 1;
+  let w = Math.max(...c) - Math.min(...c) + 1;
 
-  if (len === 3) {
-    let sameRow = r.every(x => x === r[0]);
-    let sameCol = c.every(x => x === c[0]);
-
-    if (sameRow) {
-      c.sort((a,b)=>a-b);
-      return (c[1] === c[0] + 1 && c[2] === c[1] + 1);
-    }
-
-    if (sameCol) {
-      r.sort((a,b)=>a-b);
-      return (r[1] === r[0] + 1 && r[2] === r[1] + 1);
-    }
-  }
-
-  return false;
+  return (h === 2 && w === 3) || (h === 3 && w === 2);
 }
 
-// ===== SAVE =====
-function saveShips() {
-  db.ref("rooms/" + room + "/ships/" + player).set(localBoard);
-  db.ref("rooms/" + room).update({ ["ready" + player]: true });
+// ===== CHECK RADAR =====
+function checkRadar(arr) {
+  const ref = db.ref("rooms/" + room);
+
+  ref.once("value", snap => {
+    let data = snap.val();
+    let enemy = player === "A" ? "B" : "A";
+    let enemyBoard = data.ships?.[enemy] || [];
+
+    let found = arr.some(i => enemyBoard[i] > 0);
+
+    radarUsed++;
+
+    alert(found ? "📡 CÓ tàu!" : "📡 KHÔNG có tàu!");
+  });
 }
 
-// ===== ATTACK =====
+// ===== ATTACK (giữ đơn giản) =====
 function attack(i) {
   const ref = db.ref("rooms/" + room);
 
   ref.once("value", snap => {
     let data = snap.val();
-
-    if (data.phase !== "battle") return;
-    if (data.turn !== player) return;
-
     let enemy = player === "A" ? "B" : "A";
-    let enemyBoard = data.ships?.[enemy] || [];
+    let board = data.ships?.[enemy] || [];
 
-    if (enemyBoard[i] > 0) {
+    if (board[i] > 0) {
       alert("🎯 TRÚNG!");
       enemyHits.push(i);
-
-      let shipType = enemyBoard[i];
-
-      let sunk = true;
-      for (let x = 0; x < enemyBoard.length; x++) {
-        if (enemyBoard[x] === shipType && !enemyHits.includes(x)) {
-          sunk = false;
-          break;
-        }
-      }
-
-      if (sunk) {
-        alert("🔥 Đã hạ gục tàu " + shipType + "!");
-
-        for (let x = 0; x < enemyBoard.length; x++) {
-          if (enemyBoard[x] === shipType) {
-            enemyBoard[x] = 0;
-          }
-        }
-
-        ref.update({
-          event: {
-            id: Date.now(),
-            type: "sunk",
-            ship: shipType,
-            owner: enemy
-          }
-        });
-      }
-
-      if (enemyBoard.every(x => x === 0)) {
-        ref.update({ winner: player });
-        return;
-      }
-
     } else {
       alert("💦 Trượt");
       myHits.push(i);
     }
 
     ref.update({
-      ["ships/" + enemy]: enemyBoard,
+      ["ships/" + enemy]: board,
       turn: enemy
     });
   });
 }
 
-// ===== RESET =====
-function resetGame() {
-  player = null;
-  room = null;
-
-  localBoard = Array(27).fill(0);
-  enemyHits = [];
-  myHits = [];
-
-  placing = true;
-  placingShip = 2;
-  temp = [];
-
-  joined = false;
-
-  document.getElementById("board").style.display = "none";
-  statusText("Nhập Room ID để chơi");
-  document.getElementById("roomId").value = "";
-
-  drawBoard();
-}
-
+// ===== INIT =====
 drawBoard();
 </script>
 
