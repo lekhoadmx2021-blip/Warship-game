@@ -65,6 +65,20 @@ body::before {
   padding: 15px;
   border-radius: 18px;
 }
+
+button {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 2px solid #00d4ff;
+  background: rgba(0,150,255,0.2);
+  color: white;
+  cursor: pointer;
+  margin: 5px;
+}
+
+button:hover {
+  background: rgba(0,150,255,0.5);
+}
 </style>
 </head>
 
@@ -75,7 +89,7 @@ body::before {
 <div>
   <input id="roomId" placeholder="Nhập Room ID">
   <button onclick="joinGame()">Tham gia</button>
-  <button onclick="enableRadar()">🔍 Radar</button>
+  <button onclick="toggleRadar()">🔍 Radar</button>
 </div>
 
 <p id="status">Nhập Room ID để chơi</p>
@@ -101,12 +115,7 @@ let localBoard = Array(27).fill(0);
 let enemyHits = [];
 let myHits = [];
 
-let placing = true;
-let placingShip = 2;
-let temp = [];
-
 let joined = false;
-let lastEventId = null;
 
 // ===== RADAR =====
 let radarMode = false;
@@ -123,7 +132,6 @@ function drawBoard() {
     let div = document.createElement("div");
     div.className = "cell";
 
-    if (localBoard[i] > 0) div.innerText = localBoard[i];
     if (enemyHits.includes(i)) div.classList.add("hit");
     if (myHits.includes(i)) div.classList.add("miss");
 
@@ -142,23 +150,12 @@ function joinGame() {
   ref.once("value", snap => {
     let data = snap.val();
 
-    if (data && data.players >= 2) {
-      ref.remove();
-      data = null;
-    }
-
     if (!data) {
       player = "A";
-      ref.set({ players: 1, phase: "waiting" });
+      ref.set({ players: 1 });
     } else {
       player = "B";
-      ref.update({
-        players: 2,
-        turn: "A",
-        phase: "placing",
-        readyA: false,
-        readyB: false
-      });
+      ref.update({ players: 2, turn: "A" });
     }
 
     joined = true;
@@ -172,21 +169,14 @@ function listenGame() {
     let data = snap.val();
     if (!data || !joined) return;
 
-    if (data.ships && data.ships[player]) {
-      localBoard = data.ships[player];
-    }
-
     drawBoard();
 
     if (data.players < 2) {
-      statusText("Chờ người chơi...");
+      statusText("⏳ Đang chờ người chơi thứ 2...");
       return;
     }
 
-    if (data.phase === "battle") {
-      placing = false;
-      statusText("Lượt: " + data.turn);
-    }
+    statusText("Lượt: " + data.turn);
   });
 }
 
@@ -194,24 +184,27 @@ function statusText(t){
   document.getElementById("status").innerText = t;
 }
 
-// ===== RADAR =====
-function enableRadar() {
+// ===== RADAR TOGGLE =====
+function toggleRadar() {
   if (radarUsed >= RADAR_LIMIT) {
     alert("Hết lượt Radar!");
     return;
   }
 
-  radarMode = true;
+  radarMode = !radarMode;
   radarTemp = [];
-  statusText("🔍 Chọn 6 ô (2x3 hoặc 3x2)");
+
+  if (radarMode) {
+    statusText("🔍 Radar bật: chọn 6 ô");
+  } else {
+    statusText("❌ Radar tắt");
+  }
 }
 
 // ===== CLICK =====
 function clickCell(i) {
-
   if (!joined) return;
 
-  // ===== RADAR MODE =====
   if (radarMode) {
     if (radarTemp.includes(i)) return;
 
@@ -230,8 +223,6 @@ function clickCell(i) {
     return;
   }
 
-  // ===== ATTACK =====
-  if (enemyHits.includes(i) || myHits.includes(i)) return;
   attack(i);
 }
 
@@ -263,31 +254,11 @@ function checkRadar(arr) {
   });
 }
 
-// ===== ATTACK (giữ đơn giản) =====
+// ===== ATTACK =====
 function attack(i) {
-  const ref = db.ref("rooms/" + room);
-
-  ref.once("value", snap => {
-    let data = snap.val();
-    let enemy = player === "A" ? "B" : "A";
-    let board = data.ships?.[enemy] || [];
-
-    if (board[i] > 0) {
-      alert("🎯 TRÚNG!");
-      enemyHits.push(i);
-    } else {
-      alert("💦 Trượt");
-      myHits.push(i);
-    }
-
-    ref.update({
-      ["ships/" + enemy]: board,
-      turn: enemy
-    });
-  });
+  alert("💥 Bắn vào ô " + i);
 }
 
-// ===== INIT =====
 drawBoard();
 </script>
 
