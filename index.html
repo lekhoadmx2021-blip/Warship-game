@@ -171,7 +171,7 @@ function drawBoard() {
   }
 }
 
-// ===== JOIN =====
+// ===== JOIN (FIX) =====
 function joinGame() {
   useRadar = document.getElementById("radarOption").checked;
 
@@ -180,30 +180,32 @@ function joinGame() {
 
   const ref = db.ref("rooms/" + room);
 
-  ref.once("value", snap => {
-    let data = snap.val();
+  ref.transaction(current => {
 
-    if (data && data.players >= 2) {
-      ref.remove();
-      data = null;
-    }
-
-    if (!data) {
+    if (current === null) {
       player = "A";
-      ref.set({
+      return {
         players: 1,
         phase: "waiting"
-      });
-    } 
-    else if (data.players === 1) {
+      };
+    }
+
+    if (current.players === 1) {
       player = "B";
-      ref.update({
-        players: 2,
-        turn: "A",
-        phase: "placing",
-        readyA: false,
-        readyB: false
-      });
+      current.players = 2;
+      current.turn = "A";
+      current.phase = "placing";
+      current.readyA = false;
+      current.readyB = false;
+      return current;
+    }
+
+    return;
+  }, (error, committed, snapshot) => {
+
+    if (!committed) {
+      alert("Phòng đã đầy!");
+      return;
     }
 
     joined = true;
