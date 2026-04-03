@@ -137,11 +137,20 @@ function drawBoard() {
 
     if (localBoard[i] > 0) div.innerText = localBoard[i];
 
-    // ===== HIỂN THỊ X =====
+    // ===== HIỂN THỊ X (ĐÃ FIX - KHÔNG GHI ĐÈ) =====
     if (attackedCells.includes(i)) {
-      div.innerText = "X";
-      div.style.color = "yellow";
-      div.style.fontSize = "18px";
+      let xMark = document.createElement("div");
+      xMark.innerText = "X";
+      xMark.style.position = "absolute";
+      xMark.style.color = "yellow";
+      xMark.style.fontSize = "18px";
+      xMark.style.fontWeight = "bold";
+      xMark.style.top = "50%";
+      xMark.style.left = "50%";
+      xMark.style.transform = "translate(-50%, -50%)";
+
+      div.style.position = "relative";
+      div.appendChild(xMark);
     }
 
     if (enemyHits.includes(i)) div.classList.add("hit");
@@ -212,7 +221,6 @@ function listenGame() {
       localBoard = data.ships[player];
     }
 
-    // ===== NHẬN DATA X =====
     if (data.attacks && data.attacks[player]) {
       attackedCells = data.attacks[player];
     }
@@ -395,7 +403,6 @@ function attack(i) {
       myHits.push(i);
     }
 
-    // ===== FIX KHÔNG DÙNG ?. =====
     let enemyAttacks = [];
     if (data.attacks && data.attacks[enemy]) {
       enemyAttacks = data.attacks[enemy];
@@ -438,4 +445,4 @@ drawBoard();
 </script>
 
 </body>
-  </html>
+</html>
