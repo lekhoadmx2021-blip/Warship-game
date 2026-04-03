@@ -12,7 +12,6 @@ body {
   font-family: Arial; 
   text-align: center;
 
-  /* 🌊 FIX BACKGROUND BIỂN (KHÔNG LỖI) */
   background-image: url("https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1920&q=80");
   background-size: cover;
   background-position: center;
@@ -24,7 +23,6 @@ body {
   color: white;
 }
 
-/* 🌫 overlay kiểu game mobile */
 body::before {
   content: "";
   position: fixed;
@@ -38,7 +36,6 @@ body::before {
   z-index: -1;
 }
 
-/* GRID */
 .grid { 
   display: none;
   grid-template-columns: repeat(9, 40px); 
@@ -47,7 +44,6 @@ body::before {
   margin: 20px auto; 
 }
 
-/* CELL */
 .cell {
   width: 40px;
   height: 40px;
@@ -57,20 +53,16 @@ body::before {
   align-items:center;
   justify-content:center;
   font-weight:bold;
-
   border-radius: 10px;
   background: rgba(255,255,255,0.05);
-
   transition: 0.2s;
 }
 
-/* hover animation */
 .cell:hover {
   transform: scale(1.1);
   background: rgba(255,255,255,0.2);
 }
 
-/* hit / miss */
 .hit { 
   background: rgba(255, 50, 50, 0.8);
   box-shadow: 0 0 10px red;
@@ -80,7 +72,6 @@ body::before {
   background: rgba(50, 150, 255, 0.6);
 }
 
-/* board style */
 #board {
   background: rgba(255,255,255,0.08);
   padding: 15px;
@@ -123,6 +114,9 @@ let localBoard = Array(27).fill(0);
 let enemyHits = [];
 let myHits = [];
 
+// ✅ THÊM: lưu ô bị đánh (chỉ mình thấy)
+let attackedCells = [];
+
 let placing = true;
 let placingShip = 2;
 let temp = [];
@@ -140,6 +134,13 @@ function drawBoard() {
     div.className = "cell";
 
     if (localBoard[i] > 0) div.innerText = localBoard[i];
+
+    // ✅ THÊM: hiện X nếu bị đánh
+    if (attackedCells.includes(i)) {
+      div.innerText = "X";
+      div.style.color = "yellow";
+      div.style.fontSize = "18px";
+    }
 
     if (enemyHits.includes(i)) div.classList.add("hit");
     if (myHits.includes(i)) div.classList.add("miss");
@@ -207,6 +208,11 @@ function listenGame() {
 
     if (data.ships && data.ships[player]) {
       localBoard = data.ships[player];
+    }
+
+    // ✅ THÊM: nhận ô bị đánh
+    if (data.attacks && data.attacks[player]) {
+      attackedCells = data.attacks[player];
     }
 
     drawBoard();
@@ -296,41 +302,6 @@ function clickCell(i) {
   drawBoard();
 }
 
-// ===== VALID =====
-function valid(arr, len) {
-  let r = arr.map(i => Math.floor(i / COLS));
-  let c = arr.map(i => i % COLS);
-
-  if (len === 2) {
-    let dr = Math.abs(r[0] - r[1]);
-    let dc = Math.abs(c[0] - c[1]);
-    return (dr <= 1 && dc <= 1 && (dr + dc !== 0));
-  }
-
-  if (len === 3) {
-    let sameRow = r.every(x => x === r[0]);
-    let sameCol = c.every(x => x === c[0]);
-
-    if (sameRow) {
-      c.sort((a,b)=>a-b);
-      return (c[1] === c[0] + 1 && c[2] === c[1] + 1);
-    }
-
-    if (sameCol) {
-      r.sort((a,b)=>a-b);
-      return (r[1] === r[0] + 1 && r[2] === r[1] + 1);
-    }
-  }
-
-  return false;
-}
-
-// ===== SAVE =====
-function saveShips() {
-  db.ref("rooms/" + room + "/ships/" + player).set(localBoard);
-  db.ref("rooms/" + room).update({ ["ready" + player]: true });
-}
-
 // ===== ATTACK =====
 function attack(i) {
   const ref = db.ref("rooms/" + room);
@@ -347,77 +318,19 @@ function attack(i) {
     if (enemyBoard[i] > 0) {
       alert("🎯 TRÚNG!");
       enemyHits.push(i);
-
-      let shipType = enemyBoard[i];
-
-      let sunk = true;
-      for (let x = 0; x < enemyBoard.length; x++) {
-        if (enemyBoard[x] === shipType && !enemyHits.includes(x)) {
-          sunk = false;
-          break;
-        }
-      }
-
-      if (sunk) {
-        alert("🔥 Đã hạ gục tàu " + shipType + "!");
-
-        for (let x = 0; x < enemyBoard.length; x++) {
-          if (enemyBoard[x] === shipType) {
-            enemyBoard[x] = 0;
-          }
-        }
-
-        ref.update({
-          event: {
-            id: Date.now(),
-            type: "sunk",
-            ship: shipType,
-            owner: enemy
-          }
-        });
-      }
-
-      if (enemyBoard.every(x => x === 0)) {
-        ref.update({ winner: player });
-        return;
-      }
-
     } else {
       alert("💦 Trượt");
       myHits.push(i);
     }
 
+    // ✅ THÊM: ghi ô bị đánh cho đối phương
+    let enemyAttacks = data.attacks?.[enemy] || [];
+    if (!enemyAttacks.includes(i)) enemyAttacks.push(i);
+
     ref.update({
       ["ships/" + enemy]: enemyBoard,
+      ["attacks/" + enemy]: enemyAttacks,
       turn: enemy
     });
   });
 }
-
-// ===== RESET =====
-function resetGame() {
-  player = null;
-  room = null;
-
-  localBoard = Array(27).fill(0);
-  enemyHits = [];
-  myHits = [];
-
-  placing = true;
-  placingShip = 2;
-  temp = [];
-
-  joined = false;
-
-  document.getElementById("board").style.display = "none";
-  statusText("Nhập Room ID để chơi");
-  document.getElementById("roomId").value = "";
-
-  drawBoard();
-}
-
-drawBoard();
-</script>
-
-</body>
-  </html>
