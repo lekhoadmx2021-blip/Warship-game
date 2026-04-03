@@ -392,7 +392,98 @@ function clickCell(i) {
   drawBoard();
 }
 
-// ===== (PHẦN CÒN LẠI GIỮ NGUYÊN 100%) =====
+// ===== THÊM PHẦN THIẾU =====
+function valid(arr, len) {
+  let r = arr.map(i => Math.floor(i / COLS));
+  let c = arr.map(i => i % COLS);
+
+  if (len === 2) {
+    let dr = Math.abs(r[0] - r[1]);
+    let dc = Math.abs(c[0] - c[1]);
+    return (dr <= 1 && dc <= 1 && (dr + dc !== 0));
+  }
+
+  if (len === 3) {
+    let sameRow = r.every(x => x === r[0]);
+    let sameCol = c.every(x => x === c[0]);
+
+    if (sameRow) {
+      c.sort((a,b)=>a-b);
+      return (c[1] === c[0] + 1 && c[2] === c[1] + 1);
+    }
+
+    if (sameCol) {
+      r.sort((a,b)=>a-b);
+      return (r[1] === r[0] + 1 && r[2] === r[1] + 1);
+    }
+  }
+
+  return false;
+}
+
+function saveShips() {
+  db.ref("rooms/" + room + "/ships/" + player).set(localBoard);
+  db.ref("rooms/" + room).update({ ["ready" + player]: true });
+}
+
+function attack(i) {
+  const ref = db.ref("rooms/" + room);
+
+  ref.once("value", snap => {
+    let data = snap.val();
+
+    if (data.phase !== "battle") return;
+    if (data.turn !== player) return;
+
+    let enemy = player === "A" ? "B" : "A";
+    let enemyBoard = data.ships?.[enemy] || [];
+
+    if (enemyBoard[i] > 0) {
+      alert("🎯 TRÚNG!");
+      enemyHits.push(i);
+    } else {
+      alert("💦 Trượt");
+      myHits.push(i);
+    }
+
+    let enemyAttacks = [];
+    if (data.attacks && data.attacks[enemy]) {
+      enemyAttacks = data.attacks[enemy];
+    }
+
+    if (!enemyAttacks.includes(i)) enemyAttacks.push(i);
+
+    ref.update({
+      ["ships/" + enemy]: enemyBoard,
+      ["attacks/" + enemy]: enemyAttacks,
+      turn: enemy
+    });
+  });
+}
+
+function resetGame() {
+  player = null;
+  room = null;
+
+  localBoard = Array(27).fill(0);
+  enemyHits = [];
+  myHits = [];
+  attackedCells = [];
+
+  placing = true;
+  placingShip = 2;
+  temp = [];
+
+  joined = false;
+
+  document.getElementById("board").style.display = "none";
+  statusText("Nhập Room ID để chơi");
+  document.getElementById("roomId").value = "";
+
+  drawBoard();
+}
+
+drawBoard();
 </script>
 
 </body>
