@@ -12,7 +12,6 @@ body {
   font-family: Arial; 
   text-align: center;
 
-  /* 🌊 FIX BACKGROUND BIỂN (KHÔNG LỖI) */
   background-image: url("https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1920&q=80");
   background-size: cover;
   background-position: center;
@@ -24,7 +23,6 @@ body {
   color: white;
 }
 
-/* 🌫 overlay kiểu game mobile */
 body::before {
   content: "";
   position: fixed;
@@ -38,7 +36,6 @@ body::before {
   z-index: -1;
 }
 
-/* GRID */
 .grid { 
   display: none;
   grid-template-columns: repeat(9, 40px); 
@@ -47,7 +44,6 @@ body::before {
   margin: 20px auto; 
 }
 
-/* CELL */
 .cell {
   width: 40px;
   height: 40px;
@@ -64,13 +60,11 @@ body::before {
   transition: 0.2s;
 }
 
-/* hover animation */
 .cell:hover {
   transform: scale(1.1);
   background: rgba(255,255,255,0.2);
 }
 
-/* hit / miss */
 .hit { 
   background: rgba(255, 50, 50, 0.8);
   box-shadow: 0 0 10px red;
@@ -80,7 +74,6 @@ body::before {
   background: rgba(50, 150, 255, 0.6);
 }
 
-/* board style */
 #board {
   background: rgba(255,255,255,0.08);
   padding: 15px;
@@ -144,7 +137,7 @@ function drawBoard() {
 
     if (localBoard[i] > 0) div.innerText = localBoard[i];
 
-    // ===== THÊM =====
+    // ===== HIỂN THỊ X =====
     if (attackedCells.includes(i)) {
       div.innerText = "X";
       div.style.color = "yellow";
@@ -219,7 +212,7 @@ function listenGame() {
       localBoard = data.ships[player];
     }
 
-    // ===== THÊM =====
+    // ===== NHẬN DATA X =====
     if (data.attacks && data.attacks[player]) {
       attackedCells = data.attacks[player];
     }
@@ -402,8 +395,12 @@ function attack(i) {
       myHits.push(i);
     }
 
-    // ===== THÊM =====
-    let enemyAttacks = data.attacks?.[enemy] || [];
+    // ===== FIX KHÔNG DÙNG ?. =====
+    let enemyAttacks = [];
+    if (data.attacks && data.attacks[enemy]) {
+      enemyAttacks = data.attacks[enemy];
+    }
+
     if (!enemyAttacks.includes(i)) enemyAttacks.push(i);
 
     ref.update({
@@ -422,7 +419,7 @@ function resetGame() {
   localBoard = Array(27).fill(0);
   enemyHits = [];
   myHits = [];
-  attackedCells = []; // thêm reset
+  attackedCells = [];
 
   placing = true;
   placingShip = 2;
@@ -441,4 +438,4 @@ drawBoard();
 </script>
 
 </body>
-</html>
+  </html>
