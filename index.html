@@ -11,23 +11,34 @@
 body { 
   font-family: Arial; 
   text-align: center;
+
+  /* 🌊 FIX BACKGROUND BIỂN (KHÔNG LỖI) */
   background-image: url("https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1920&q=80");
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
   background-attachment: fixed;
+
   margin: 0;
+  padding: 0;
   color: white;
 }
 
+/* 🌫 overlay kiểu game mobile */
 body::before {
   content: "";
   position: fixed;
+  top: 0; left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(rgba(0,40,80,0.6), rgba(0,120,180,0.4));
+  background: linear-gradient(
+    rgba(0, 40, 80, 0.6),
+    rgba(0, 120, 180, 0.4)
+  );
   z-index: -1;
 }
 
+/* GRID */
 .grid { 
   display: none;
   grid-template-columns: repeat(9, 40px); 
@@ -36,6 +47,7 @@ body::before {
   margin: 20px auto; 
 }
 
+/* CELL */
 .cell {
   width: 40px;
   height: 40px;
@@ -45,17 +57,36 @@ body::before {
   align-items:center;
   justify-content:center;
   font-weight:bold;
+
   border-radius: 10px;
   background: rgba(255,255,255,0.05);
+
+  transition: 0.2s;
 }
 
-.hit { background: rgba(255,50,50,0.8); }
-.miss { background: rgba(50,150,255,0.6); }
+/* hover animation */
+.cell:hover {
+  transform: scale(1.1);
+  background: rgba(255,255,255,0.2);
+}
 
+/* hit / miss */
+.hit { 
+  background: rgba(255, 50, 50, 0.8);
+  box-shadow: 0 0 10px red;
+}
+
+.miss { 
+  background: rgba(50, 150, 255, 0.6);
+}
+
+/* board style */
 #board {
   background: rgba(255,255,255,0.08);
   padding: 15px;
   border-radius: 18px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 20px rgba(0,0,0,0.3);
 }
 </style>
 </head>
@@ -91,7 +122,6 @@ let room = null;
 let localBoard = Array(27).fill(0);
 let enemyHits = [];
 let myHits = [];
-let attackedCells = []; // ✅ ô mình bị đánh
 
 let placing = true;
 let placingShip = 2;
@@ -109,14 +139,7 @@ function drawBoard() {
     let div = document.createElement("div");
     div.className = "cell";
 
-    // ✅ ưu tiên X
-    if (attackedCells.includes(i)) {
-      div.innerText = "X";
-      div.style.color = "yellow";
-    } 
-    else if (localBoard[i] > 0) {
-      div.innerText = localBoard[i];
-    }
+    if (localBoard[i] > 0) div.innerText = localBoard[i];
 
     if (enemyHits.includes(i)) div.classList.add("hit");
     if (myHits.includes(i)) div.classList.add("miss");
@@ -136,10 +159,19 @@ function joinGame() {
   ref.once("value", snap => {
     let data = snap.val();
 
+    if (data && data.players >= 2) {
+      ref.remove();
+      data = null;
+    }
+
     if (!data) {
       player = "A";
-      ref.set({ players: 1, phase: "waiting" });
-    } else {
+      ref.set({
+        players: 1,
+        phase: "waiting"
+      });
+    } 
+    else if (data.players === 1) {
       player = "B";
       ref.update({
         players: 2,
@@ -159,15 +191,22 @@ function joinGame() {
 function listenGame() {
   db.ref("rooms/" + room).on("value", snap => {
     let data = snap.val();
-    if (!data) return;
+    if (!data || !joined) return;
+
+    if (data.event && data.event.id !== lastEventId) {
+      lastEventId = data.event.id;
+
+      const ev = data.event;
+
+      if (ev.type === "sunk" && ev.owner === player) {
+        alert("💀 Tàu " + ev.ship + " của bạn đã bị tiêu diệt!");
+      }
+
+      db.ref("rooms/" + room + "/event").remove();
+    }
 
     if (data.ships && data.ships[player]) {
       localBoard = data.ships[player];
-    }
-
-    // ✅ load ô bị đánh
-    if (data.attacks && data.attacks[player]) {
-      attackedCells = data.attacks[player];
     }
 
     drawBoard();
@@ -179,6 +218,40 @@ function listenGame() {
     }
 
     document.getElementById("board").style.display = "grid";
+
+    if (data.winner) {
+      statusText(data.winner === player ? "🎉 THẮNG!" : "💀 THUA!");
+
+      setTimeout(() => {
+        alert("Game kết thúc!");
+
+        if (player === "A") {
+          db.ref("rooms/" + room).remove();
+        }
+
+        resetGame();
+      }, 2000);
+
+      return;
+    }
+
+    if (data.phase === "placing") {
+
+      if (placing) {
+        statusText(placingShip === 2 ? "👉 Đặt tàu 2 ô" : "👉 Đặt tàu 3 ô");
+      } else {
+        statusText("Chờ đối phương...");
+      }
+
+      if (data.readyA && data.readyB) {
+        db.ref("rooms/" + room).update({
+          phase: "battle",
+          turn: "A"
+        });
+      }
+
+      return;
+    }
 
     if (data.phase === "battle") {
       placing = false;
@@ -205,6 +278,7 @@ function clickCell(i) {
 
         if (placingShip === 2) {
           placingShip = 3;
+          statusText("👉 Đặt tàu 3");
         } else {
           placing = false;
           saveShips();
@@ -275,8 +349,8 @@ function attack(i) {
       enemyHits.push(i);
 
       let shipType = enemyBoard[i];
-      let sunk = true;
 
+      let sunk = true;
       for (let x = 0; x < enemyBoard.length; x++) {
         if (enemyBoard[x] === shipType && !enemyHits.includes(x)) {
           sunk = false;
@@ -286,9 +360,26 @@ function attack(i) {
 
       if (sunk) {
         alert("🔥 Đã hạ gục tàu " + shipType + "!");
+
         for (let x = 0; x < enemyBoard.length; x++) {
-          if (enemyBoard[x] === shipType) enemyBoard[x] = 0;
+          if (enemyBoard[x] === shipType) {
+            enemyBoard[x] = 0;
+          }
         }
+
+        ref.update({
+          event: {
+            id: Date.now(),
+            type: "sunk",
+            ship: shipType,
+            owner: enemy
+          }
+        });
+      }
+
+      if (enemyBoard.every(x => x === 0)) {
+        ref.update({ winner: player });
+        return;
       }
 
     } else {
@@ -296,13 +387,8 @@ function attack(i) {
       myHits.push(i);
     }
 
-    // ✅ lưu cho người bị đánh
-    let attackedList = data.attacks?.[enemy] || [];
-    if (!attackedList.includes(i)) attackedList.push(i);
-
     ref.update({
       ["ships/" + enemy]: enemyBoard,
-      ["attacks/" + enemy]: attackedList,
       turn: enemy
     });
   });
@@ -316,7 +402,6 @@ function resetGame() {
   localBoard = Array(27).fill(0);
   enemyHits = [];
   myHits = [];
-  attackedCells = [];
 
   placing = true;
   placingShip = 2;
@@ -335,4 +420,4 @@ drawBoard();
 </script>
 
 </body>
-</html>
+  </html>
