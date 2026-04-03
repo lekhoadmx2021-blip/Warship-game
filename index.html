@@ -171,7 +171,7 @@ function drawBoard() {
   }
 }
 
-// ===== JOIN (FIX) =====
+// ===== JOIN (GIỮ NGUYÊN + THÊM FIX) =====
 function joinGame() {
   useRadar = document.getElementById("radarOption").checked;
 
@@ -179,6 +179,14 @@ function joinGame() {
   if (!room) return alert("Nhập Room ID!");
 
   const ref = db.ref("rooms/" + room);
+
+  // ===== FIX PHÒNG MA =====
+  ref.once("value", snap => {
+    let data = snap.val();
+    if (data && data.players >= 2 && !data.phase) {
+      ref.remove();
+    }
+  });
 
   ref.transaction(current => {
 
@@ -213,7 +221,7 @@ function joinGame() {
   });
 }
 
-// ===== LISTEN =====
+// ===== LISTEN (GIỮ NGUYÊN) =====
 function listenGame() {
   db.ref("rooms/" + room).on("value", snap => {
     let data = snap.val();
@@ -298,7 +306,7 @@ function statusText(t){
   document.getElementById("status").innerText = t;
 }
 
-// ===== RADAR =====
+// ===== RADAR (GIỮ NGUYÊN) =====
 function activateRadar() {
   if (radarUsed) return alert("Đã dùng radar rồi!");
   radarMode = true;
@@ -348,7 +356,7 @@ function scanRadar() {
   });
 }
 
-// ===== CLICK =====
+// ===== CLICK (GIỮ NGUYÊN) =====
 function clickCell(i) {
   if (!joined) return;
 
@@ -394,7 +402,7 @@ function clickCell(i) {
   drawBoard();
 }
 
-// ===== THÊM PHẦN THIẾU =====
+// ===== VALID =====
 function valid(arr, len) {
   let r = arr.map(i => Math.floor(i / COLS));
   let c = arr.map(i => i % COLS);
@@ -428,6 +436,7 @@ function saveShips() {
   db.ref("rooms/" + room).update({ ["ready" + player]: true });
 }
 
+// ===== ATTACK (THÊM WIN + SUNK) =====
 function attack(i) {
   const ref = db.ref("rooms/" + room);
 
@@ -443,6 +452,41 @@ function attack(i) {
     if (enemyBoard[i] > 0) {
       alert("🎯 TRÚNG!");
       enemyHits.push(i);
+
+      let shipType = enemyBoard[i];
+
+      let sunk = true;
+      for (let x = 0; x < enemyBoard.length; x++) {
+        if (enemyBoard[x] === shipType && !enemyHits.includes(x)) {
+          sunk = false;
+          break;
+        }
+      }
+
+      if (sunk) {
+        alert("🔥 Đã hạ gục tàu " + shipType + "!");
+
+        for (let x = 0; x < enemyBoard.length; x++) {
+          if (enemyBoard[x] === shipType) {
+            enemyBoard[x] = 0;
+          }
+        }
+
+        ref.update({
+          event: {
+            id: Date.now(),
+            type: "sunk",
+            ship: shipType,
+            owner: enemy
+          }
+        });
+      }
+
+      if (enemyBoard.every(x => x === 0)) {
+        ref.update({ winner: player });
+        return;
+      }
+
     } else {
       alert("💦 Trượt");
       myHits.push(i);
